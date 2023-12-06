@@ -30,20 +30,39 @@ public class SSEController2 {
      * 建立连接
      *
      * @param request 当前请求
-     * @return 建立连接的Id
+     * @return .
      */
     @GetMapping(value = "/connect", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public Flux<String> connect(ServerHttpRequest request) {
+        return Flux.defer(() -> {
+            final var connectId = request.getId();
+            return this.doConnect(connectId);
+        });
+    }
+
+    /**
+     * 建立连接
+     *
+     * @param connectId 当前连接分配的Id
+     * @return .
+     */
+    private Flux<String> doConnect(String connectId) {
         return Flux.<String>create(sink -> {
-
-                    final var connectId = request.getId();
-
                     sink.next("连接成功");
                     sink.next(String.format("你的专属Id是: [%s]", connectId));
 
                     CONNECT_CHANNEL_MAP.put(connectId, sink);
                 })
-                .map(it -> String.format("%s -> %s", dtf.format(LocalDateTime.now()), it));
+                .map(it -> String.format("%s -> %s", dtf.format(LocalDateTime.now()), it))
+                .doOnTerminate(() -> this.sinkTermination(connectId))
+                .doOnCancel(() -> this.sinkTermination(connectId));
+    }
+
+    /**
+     * 在完成/取消/异常时执行移除建立连接管道
+     */
+    private void sinkTermination(String connectId) {
+        CONNECT_CHANNEL_MAP.remove(connectId);
     }
 
     /**
